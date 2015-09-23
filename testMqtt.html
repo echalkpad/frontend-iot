@@ -1,0 +1,128 @@
+<html>
+
+<head>
+    <title>test Ws mqtt.js</title>
+</head>
+
+<body>
+    <script src='http://code.jquery.com/jquery.min.js'></script>
+    <script src="./browserMqtt.js"></script>
+
+    <script>
+        var client = mqtt.connect('http://test');
+        client.end();
+        $(document).ready(function () {
+            var connect = function () {
+                console.log('Conectando');
+                var ioturl = $('#ioturl').val();
+                if (ioturl) {
+                    try {
+                        client = undefined;
+                        client = mqtt.connect(ioturl, {
+                            clientId: 'mqtttest-' + (new Date()).getTime()
+                        }); // you add a ws:// url here
+                        client.subscribe("sensorStatus");
+                        console.log('Client started');
+
+                        client.on("message", function (topic, payload) {
+                            console.log([topic, payload].join(": "));
+
+                            var data = $.parseJSON(payload.toString());
+                            if (topic.indexOf('temperatureUpdate-') === 0) {
+                                updateTemperature(data);
+                            } else {
+                                if (topic === 'sensorStatus') {
+                                    updateSensorStatus(data);
+                                } else {
+                                    console.error('Topic', topic, 'no reconocido');
+                                }
+                            }
+                        });
+
+                    } catch (err) {
+                        console.log('Error: ', err);
+                        alert('No se pudo conectar a ' + ioturl);
+                    }
+                } else {
+                    alert('Ingrese una url')
+                }
+            }
+
+            var updateTemperature = function (data) {
+                $.each(data, function (idx, el) {
+                    console.log(el);
+                    $('#temperature').html(el.value);
+                    $('#tdate-sensor').html('Sensor: ' + el.sensorId + ' - ' + el.captureDate);
+                });
+            }
+            var updateSensorStatus = function (data) {
+                $('#status').html('');
+                $.each(data, function (idx, el) {
+                    console.log(el);
+                    $('#status').append(el.name + ': ' + el.status + '<br />');
+                });
+            }
+
+            var disconnect = function () {
+                console.log('Desconectando');
+                client.end();
+            }
+
+            $('#btnconnect').on('click', connect);
+            $('#btndisconnect').on('click', disconnect);
+
+            $('#btnstatus').on('click', function () {
+                console.log('getStatus');
+                if (client) {
+                    /*var msg = {
+                        topic: 'sensorStatus',
+                        payload: 'getStatus'
+                    };
+                    console.log(msg)
+                    client.publish(msg);*/
+                    client.subscribe('sensorStatus');                    
+                } else {
+                    alert('Debe conectarse 1ero');
+                }
+            });
+            
+            var subscriptions = [];
+            $('[id^=btnsensor]').on('click', function () {
+                // Es necesario des-suscribirse de las peticiones
+                $.each(subscriptions, function(idx, subscription){
+                    client.unsubscribe(subscription);
+                    subscriptions.splice(subscriptions.indexOf(subscription), 1);
+                });
+                console.log('Sensor: ', $(this).attr('id'));
+                if(client){
+                    var subscription = $(this).data('topic');
+                    client.subscribe(subscription);
+                    subscriptions.push(subscription);
+                } else{
+                    alert('Debe conectarse 1ero');
+                }
+            });
+
+        });
+    </script>
+    <input type="text" id="ioturl">
+    <br />
+    <br />
+    <button id="btnconnect">Conectar</button>
+    <button id="btnstatus">getStatus</button>
+    <button id="btnsensor-1" data-topic="temperatureUpdate-1">Subscribe Sensor 1</button>
+    <button id="btnsensor-2" data-topic="temperatureUpdate-2">Subscribe Sensor 2</button>
+    <button id="btnsensor-3" data-topic="temperatureUpdate-3">Subscribe Sensor 3</button>
+    <button id="btnsensor-4" data-topic="temperatureUpdate-4">Subscribe Sensor 4</button>
+    <button id="btndisconnect">Desconectar</button>
+    <hr />
+
+    <div id='temperature'></div>
+    <p id="tdate-sensor"></p>
+    <hr />
+    <div id="status"></div>
+</body>
+
+</html>
+<!-- https://github.com/mqttjs/MQTT.js#client -->
+<!-- Ejecutar en línea de comando: mosca -v --http-port 3000 --http-bundle --http-static ./ | bunyan -->
